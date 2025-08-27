@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sliding Puzzle Game</title>
+  <style>
+    :root{
+      --bg:#0f172a;          /* slate-900 */
+      --panel:#111827cc;     /* slate-800/80 */
+      --tile:#1f2937;        /* slate-700 */
+      --tile-hover:#374151;  /* slate-600 */
+      --accent:#22c55e;      /* green-500 */
+      --accent-2:#3b82f6;    /* blue-500 */
+      --text:#e5e7eb;        /* gray-200 */
+      --muted:#94a3b8;       /* slate-400 */
+      --warn:#f59e0b;        /* amber-500 */
+      --danger:#ef4444;      /* red-500 */
+      --radius:18px;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 80% -10%, #1e293b 0, rgba(30,41,59,0) 60%),
+                  radial-gradient(900px 500px at -10% 110%, #0ea5e9 0, rgba(14,165,233,0) 55%),
+                  var(--bg);
+      color:var(--text);
+      display:grid; place-items:center;
+      padding:24px;
+    }
+    .app{width:min(960px,96vw);}
+    .header{display:flex; gap:16px; align-items:center; justify-content:space-between; margin-bottom:16px}
+    .title{font-size:clamp(22px,3.2vw,34px); font-weight:800; letter-spacing:.4px}
+    .sub{color:var(--muted); font-size:14px}
+
+    .panel{background:linear-gradient(180deg, rgba(17,24,39,.9), rgba(17,24,39,.7)); border:1px solid rgba(255,255,255,.06); padding:16px; border-radius:var(--radius); box-shadow:var(--shadow)}
+    .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+    .controls .group{display:flex; align-items:center; gap:8px; background:#0b1220; padding:8px 10px; border-radius:12px; border:1px solid rgba(255,255,255,.06)}
+    label{font-size:13px; color:var(--muted)}
+    select, button{
+      appearance:none; background:var(--tile); color:var(--text);
+      border:1px solid transparent; padding:10px 14px; border-radius:12px; font-weight:600; cursor:pointer;
+      transition:.15s ease; outline:none;
+    }
+    select:hover, button:hover{transform:translateY(-1px)}
+    select:active, button:active{transform:translateY(0)}
+    button.primary{background:var(--accent); color:#001b06}
+    button.info{background:var(--accent-2); color:#02122b}
+    button.warn{background:var(--warn); color:#221402}
+    button.ghost{background:transparent; border:1px solid rgba(255,255,255,.1)}
+
+    .stats{display:flex; gap:16px; flex-wrap:wrap}
+    .stat{min-width:110px; text-align:center; background:#0b1220; padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.06)}
+    .stat .v{font-size:20px; font-weight:800}
+    .stat .k{font-size:12px; color:var(--muted)}
+
+    .board-wrap{display:grid; grid-template-columns: 1fr; gap:16px; margin-top:16px}
+    .board{aspect-ratio:1/1; width:min(92vw,520px); margin:auto; display:grid; gap:8px; padding:8px; background:#0b1220; border-radius:24px; border:1px solid rgba(255,255,255,.06); box-shadow:var(--shadow)}
+    .tile{
+      display:grid; place-items:center; font-weight:900; font-size:clamp(22px,6vw,32px);
+      background:linear-gradient(180deg, #0e1629, #18243c);
+      color:#dbeafe; border-radius:18px; user-select:none; cursor:pointer;
+      border:1px solid rgba(148,163,184,.22);
+      transition: transform .12s ease, background .2s ease, box-shadow .2s ease;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.05), 0 8px 20px rgba(2,6,23,.45);
+    }
+    .tile:hover{background:linear-gradient(180deg, #142241, #1d2d4c); transform:translateY(-2px)}
+    .tile.empty{visibility:hidden}
+    .tile.correct{outline:2px solid rgba(34,197,94,.4)}
+    .grid-size{font-weight:700}
+
+    .footer{margin-top:18px; font-size:13px; color:var(--muted); text-align:center}
+    .toast{position:fixed; inset:auto 0 24px 0; display:flex; justify-content:center; pointer-events:none}
+    .toast .msg{pointer-events:auto; background:#0b1220; border:1px solid rgba(255,255,255,.08); padding:12px 16px; border-radius:14px; box-shadow:var(--shadow)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div>
+        <div class="title">Sliding Puzzle</div>
+        <div class="sub">Move tiles to arrange them in order. Choose size, shuffle, and beat your best time!</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="controls">
+        <div class="group">
+          <label for="size">Size</label>
+          <select id="size">
+            <option value="3">3 × 3</option>
+            <option value="4" selected>4 × 4</option>
+            <option value="5">5 × 5</option>
+          </select>
+        </div>
+        <button id="shuffle" class="primary">Shuffle</button>
+        <button id="undo" class="ghost">Undo</button>
+        <button id="hint" class="info">Hint</button>
+        <button id="solve" class="warn">Auto-Solve (Demo)</button>
+        <div class="stats">
+          <div class="stat"><div class="v" id="moves">0</div><div class="k">Moves</div></div>
+          <div class="stat"><div class="v" id="time">00:00</div><div class="k">Time</div></div>
+          <div class="stat"><div class="v" id="best">—</div><div class="k">Best (time)</div></div>
+        </div>
+      </div>
+
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="Sliding puzzle board"></div>
+      </div>
+
+      <div class="footer">
+        टिप: टाइल पर क्लिक/टैप करें। सिर्फ खाली जगह के पास वाली टाइलें move होंगी।
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" style="display:none"><div class="msg" id="toastMsg"></div></div>
+
+  <script>
+    const boardEl = document.getElementById('board');
+    const sizeSelect = document.getElementById('size');
+    const movesEl = document.getElementById('moves');
+    const timeEl = document.getElementById('time');
+    const bestEl = document.getElementById('best');
+    const shuffleBtn = document.getElementById('shuffle');
+    const undoBtn = document.getElementById('undo');
+    const hintBtn = document.getElementById('hint');
+    const solveBtn = document.getElementById('solve');
+
+    let N = 4;                 // grid size
+    let tiles = [];            // 0 is empty
+    let moves = 0;
+    let timer = null;          // interval id
+    let seconds = 0;
+    let history = [];          // for undo (store previous empty index)
+    const key = (n)=>`sp_best_${n}`; // localStorage key
+
+    function fmtTime(s){
+      const m = Math.floor(s/60).toString().padStart(2,'0');
+      const ss = (s%60).toString().padStart(2,'0');
+      return `${m}:${ss}`;
+    }
+
+    function toast(msg){
+      const t = document.getElementById('toast');
+      const box = document.getElementById('toastMsg');
+      box.textContent = msg; t.style.display='flex';
+      setTimeout(()=>{t.style.display='none'}, 1600);
+    }
+
+    function startTimer(){
+      if(timer) return; // already running
+      timer = setInterval(()=>{seconds++; timeEl.textContent = fmtTime(seconds)}, 1000);
+    }
+    function stopTimer(){
+      clearInterval(timer); timer=null;
+    }
+
+    function idx(r,c){return r*N + c}
+    function rc(i){return [Math.floor(i/N), i%N]}
+
+    function isAdjacent(i,j){
+      const [r1,c1]=rc(i), [r2,c2]=rc(j);
+      const dr=Math.abs(r1-r2), dc=Math.abs(c1-c2);
+      return (dr+dc)===1;
+    }
+
+    function render(){
+      boardEl.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+      boardEl.innerHTML = '';
+      tiles.forEach((v,i)=>{
+        const d = document.createElement('div');
+        d.className = 'tile' + (v===0?' empty':'');
+        if(v!==0) d.textContent = v;
+        const correct = v!==0 && v===i+1; // in right place
+        if(correct) d.classList.add('correct');
+        d.addEventListener('click',()=>tryMove(i));
+        boardEl.appendChild(d);
+      })
+    }
+
+    function newSolved(){
+      // [1..N*N-1, 0]
+      const arr = Array.from({length:N*N}, (_,i)=> (i+1)%(N*N));
+      return arr;
+    }
+
+    function shuffleSolvable(steps=200){
+      // Start from solved and make legal random moves => always solvable
+      tiles = newSolved();
+      let empty = tiles.indexOf(0);
+      for(let s=0; s<steps; s++){
+        const nbrs = neighbors(empty);
+        const pick = nbrs[Math.floor(Math.random()*nbrs.length)];
+        swap(empty, pick);
+        empty = pick;
+      }
+    }
+
+    function neighbors(i){
+      const [r,c]=rc(i); const arr=[];
+      if(r>0) arr.push(idx(r-1,c));
+      if(r<N-1) arr.push(idx(r+1,c));
+      if(c>0) arr.push(idx(r,c-1));
+      if(c<N-1) arr.push(idx(r,c+1));
+      return arr;
+    }
+
+    function swap(i,j){ const t=tiles[i]; tiles[i]=tiles[j]; tiles[j]=t; }
+
+    function tryMove(i){
+      const empty = tiles.indexOf(0);
+      if(!isAdjacent(i, empty)) return; // invalid
+      startTimer();
+      history.push(empty); // store previous empty for undo
+      swap(i, empty);
+      moves++; movesEl.textContent = moves;
+      render();
+      checkWin();
+    }
+
+    function undo(){
+      if(history.length===0) return;
+      const prevEmpty = history.pop();
+      const empty = tiles.indexOf(0);
+      // move tile back by swapping empty with prevEmpty's neighbor (which is current empty)
+      swap(prevEmpty, empty);
+      moves++; movesEl.textContent = moves;
+      render();
+    }
+
+    function checkWin(){
+      for(let i=0;i<tiles.length-1;i++) if(tiles[i]!==i+1) return false;
+      if(tiles[tiles.length-1]!==0) return false;
+      stopTimer();
+      const bestKey = key(N);
+      const best = parseInt(localStorage.getItem(bestKey)||"0",10);
+      if(best===0 || seconds<best){
+        localStorage.setItem(bestKey, String(seconds));
+        bestEl.textContent = fmtTime(seconds);
+        toast(`नई बेस्ट टाइम! ${fmtTime(seconds)}`);
+      } else {
+        toast('शाबाश! Puzzle solved ✅');
+      }
+      return true;
+    }
+
+    function hint(){
+      // flash the tiles that are already correct
+      const nodes = [...boardEl.children];
+      nodes.forEach((el)=>{
+        if(el.classList.contains('correct')){
+          el.style.boxShadow = '0 0 0 3px rgba(34,197,94,.55) inset, 0 8px 20px rgba(2,6,23,.45)';
+          setTimeout(()=>{el.style.boxShadow=''}, 600);
+        }
+      });
+    }
+
+    function autoSolveDemo(){
+      // Not a true solver; just rewinds the shuffle history if available
+      if(history.length===0){ toast('Auto-solve तभी चलेगा जब आपने कुछ moves किए हों।'); return; }
+      const interval = setInterval(()=>{
+        if(history.length===0){ clearInterval(interval); checkWin(); return; }
+        const prevEmpty = history.pop();
+        const empty = tiles.indexOf(0);
+        swap(prevEmpty, empty);
+        moves++; movesEl.textContent = moves;
+        render();
+      }, 80);
+    }
+
+    function reset(newN=N){
+      N = newN;
+      document.querySelector('.grid-size')?.remove();
+      const tag = document.createElement('span'); tag.className='grid-size sub'; tag.textContent = `Grid: ${N}×${N}`;
+      document.querySelector('.header .title').appendChild(tag);
+
+      seconds=0; timeEl.textContent=fmtTime(seconds); stopTimer();
+      moves=0; movesEl.textContent='0'; history=[];
+      const best = localStorage.getItem(key(N));
+      bestEl.textContent = best? fmtTime(parseInt(best,10)) : '—';
+
+      shuffleSolvable(180 + N*40);
+      render();
+    }
+
+    // Event bindings
+    shuffleBtn.addEventListener('click',()=> reset(N));
+    undoBtn.addEventListener('click',()=> undo());
+    hintBtn.addEventListener('click',()=> hint());
+    solveBtn.addEventListener('click',()=> autoSolveDemo());
+    sizeSelect.addEventListener('change', (e)=>{ reset(parseInt(e.target.value,10)); });
+
+    // Keyboard support (arrow keys)
+    window.addEventListener('keydown', (e)=>{
+      const empty = tiles.indexOf(0);
+      let target = null;
+      const [r,c]=rc(empty);
+      if(e.key==='ArrowUp' && r<N-1) target = idx(r+1,c);
+      if(e.key==='ArrowDown' && r>0) target = idx(r-1,c);
+      if(e.key==='ArrowLeft' && c<N-1) target = idx(r,c+1);
+      if(e.key==='ArrowRight' && c>0) target = idx(r,c-1);
+      if(target!==null){ tryMove(target); e.preventDefault(); }
+    }, {passive:false});
+
+    // Init
+    reset(N);
+  </script>
+</body>
+</html>
